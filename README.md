@@ -18,3 +18,4 @@ This project is a web-based chatbot designed to assist students, staff, and visi
 - **Material-UI (MUI)**: Used for styling and UI components to create a modern and responsive design.
 
 ### This project is deployed on Vercel here:
+https://customer-support-ai-app.vercel.app/
