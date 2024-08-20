@@ -1,49 +1,203 @@
-// app/page.js
+// // app/page.js
 
-"use client"; // Add this line at the top
+// "use client"; // Add this line at the top
 
-import { useState } from 'react';
+// import { useState } from 'react';
+
+// export default function Home() {
+//   const [inputText, setInputText] = useState('');
+//   const [responseText, setResponseText] = useState('');
+
+//   const handleSubmit = async (e) => {
+//     e.preventDefault();
+
+//     try {
+//       const res = await fetch('/api/llama', {
+//         method: 'POST',
+//         headers: {
+//           'Content-Type': 'application/json',
+//         },
+//         body: JSON.stringify({ inputText }),
+//       });
+
+//       const data = await res.json();
+//       if (data.error) {
+//         throw new Error(data.error);
+//       }
+//       setResponseText(data.content);
+//     } catch (error) {
+//       console.error('Error:', error);
+//       setResponseText('Failed to fetch the response');
+//     }
+//   };
+
+//   return (
+//     <div>
+//       <h1>Ask Llama 3.1 via Groq</h1>
+//       <form onSubmit={handleSubmit}>
+//         <input
+//           type="text"
+//           value={inputText}
+//           onChange={(e) => setInputText(e.target.value)}
+//           placeholder="Enter your text"
+//         />
+//         <button type="submit">Submit</button>
+//       </form>
+//       {responseText && <p>Response: {responseText}</p>}
+//     </div>
+//   );
+// }
+
+
+
+
+
+'use client'
+
+import { Box, Button, Stack, TextField } from '@mui/material'
+import { useState } from 'react'
 
 export default function Home() {
-  const [inputText, setInputText] = useState('');
-  const [responseText, setResponseText] = useState('');
+  const [messages, setMessages] = useState([
+    {
+      role: 'assistant',
+      content: "Hi! I'm the Purdue University Housing support assistant. How can I help you today?",
+    },
+  ])
+  const [message, setMessage] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
+  const sendMessage = async () => {
+    if (!message.trim() || isLoading) return;
+    setIsLoading(true)
+    setMessage('')
+    setMessages((messages) => [
+      ...messages,
+      { role: 'user', content: message },
+      { role: 'assistant', content: '' },
+    ])
+  
     try {
-      const res = await fetch('/api/llama', {
+      const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ inputText }),
-      });
-
-      const data = await res.json();
-      if (data.error) {
-        throw new Error(data.error);
+        body: JSON.stringify([...messages, { role: 'user', content: message }]),
+      })
+  
+      if (!response.ok) {
+        throw new Error('Network response was not ok')
       }
-      setResponseText(data.content);
+  
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+  
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        const text = decoder.decode(value, { stream: true })
+        setMessages((messages) => {
+          let lastMessage = messages[messages.length - 1]
+          let otherMessages = messages.slice(0, messages.length - 1)
+          return [
+            ...otherMessages,
+            { ...lastMessage, content: lastMessage.content + text },
+          ]
+        })
+      }
     } catch (error) {
-      console.error('Error:', error);
-      setResponseText('Failed to fetch the response');
+      console.error('Error:', error)
+      setMessages((messages) => [
+        ...messages,
+        { role: 'assistant', content: "I'm sorry, but I encountered an error. Please try again later." },
+      ])
     }
-  };
+    setIsLoading(false)
+  }
+  const handleKeyPress = (event) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault()
+      sendMessage()
+    }
+  }
 
+  const messagesEndRef = useRef(null)
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }
+
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages])
+  
   return (
-    <div>
-      <h1>Ask Llama 3.1 via Groq</h1>
-      <form onSubmit={handleSubmit}>
-        <input
-          type="text"
-          value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
-          placeholder="Enter your text"
-        />
-        <button type="submit">Submit</button>
-      </form>
-      {responseText && <p>Response: {responseText}</p>}
-    </div>
-  );
+    <Box
+      width="100vw"
+      height="100vh"
+      display="flex"
+      flexDirection="column"
+      justifyContent="center"
+      alignItems="center"
+    >
+      <Stack
+        direction={'column'}
+        width="500px"
+        height="700px"
+        border="1px solid black"
+        p={2}
+        spacing={3}
+      >
+        <Stack
+          direction={'column'}
+          spacing={2}
+          flexGrow={1}
+          overflow="auto"
+          maxHeight="100%"
+        >
+          {messages.map((message, index) => (
+            <Box
+              key={index}
+              display="flex"
+              justifyContent={
+                message.role === 'assistant' ? 'flex-start' : 'flex-end'
+              }
+            >
+              <Box
+                bgcolor={
+                  message.role === 'assistant'
+                    ? 'primary.main'
+                    : 'secondary.main'
+                }
+                color="white"
+                borderRadius={16}
+                p={3}
+              >
+                {message.content}
+              </Box>
+            </Box>
+          ))}
+          <div ref={messagesEndRef} />
+          </Stack>
+        <Stack direction={'row'} spacing={2}>
+          <TextField
+            label="Message"
+            fullWidth
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyPress={handleKeyPress}
+            disabled={isLoading}
+          />
+          <Button 
+            variant="contained" 
+            onClick={sendMessage}
+            disabled={isLoading}
+          >
+            {isLoading ? 'Sending...' : 'Send'}
+          </Button>
+        </Stack>
+      </Stack>
+    </Box>
+  )
 }

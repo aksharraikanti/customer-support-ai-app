@@ -38,40 +38,74 @@ Response: No worries! If youve lost your room key, you should visit the front de
 Question: Who do I contact if my roommate and I are having issues?
 Response: Im sorry to hear that youre having trouble. The best course of action is to speak with your Resident Assistant (RA) or contact the halls Residence Education Coordinator (REC) to discuss the situation. They can help mediate and find a solution.`;
 
-export default async function handler(req, res) {
-    if (req.method !== 'POST') {
-        return res.status(405).json({ message: 'Only POST requests are allowed' });
-    }
+// export default async function handler(req, res) {
+//     if (req.method !== 'POST') {
+//         return res.status(405).json({ message: 'Only POST requests are allowed' });
+//     }
 
-    const { inputText } = req.body;
+//     const { inputText } = req.body;
 
-    const groq = new Groq();
+//     const groq = new Groq();
+//     const data = await res.json();
 
-    try {s
-        const chatCompletion = await groq.chat.completions.create({
-            "messages": [
-                {
-                    "role": "user",
-                    "content": inputText
-                }
-            ],
-            "model": "llama-3.1-70b-versatile",
-            "temperature": 1,
-            "max_tokens": 1024,
-            "top_p": 1,
-            "stream": true,
-            "stop": null
-        });
+//     try {s
+//         const chatCompletion = await groq.chat.completions.create({
+//             "messages": [
+//                 {
+//                     "role": 'system',
+//                     "content": systemPrompt
+//                 },
+//                 ...data
+//             ],
+//             "model": "llama-3.1-70b-versatile",
+//             "temperature": 1,
+//             "max_tokens": 1024,
+//             "top_p": 1,
+//             "stream": true,
+//             "stop": null
+//         });
 
-        let fullResponse = '';
-        for await (const chunk of chatCompletion) {
-            const content = chunk.choices[0]?.delta?.content || '';
-            fullResponse += content;
+//         let fullResponse = '';
+//         for await (const chunk of chatCompletion) {
+//             const content = chunk.choices[0]?.delta?.content || '';
+//             fullResponse += content;
+//         }
+
+//         res.status(200).json({ content: fullResponse });
+//     } catch (error) {
+//         console.error('Error:', error);
+//         res.status(500).json({ error: 'Failed to fetch data from Groq' });
+//     }
+// }
+
+export async function POST(req) {
+    const openai = new Groq()
+    const data = await req.json()
+  
+    const completion = await openai.chat.completions.create({
+      messages: [{role: 'system', content: systemPrompt}, ...data],
+      model: 'llama-3.1-70b-versatile',
+      stream: true,
+    })
+  
+    const stream = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder()
+        try {
+          for await (const chunk of completion) {
+            const content = chunk.choices[0]?.delta?.content
+            if (content) {
+              const text = encoder.encode(content)
+              controller.enqueue(text)
+            }
+          }
+        } catch (err) {
+          controller.error(err)
+        } finally {
+          controller.close()
         }
-
-        res.status(200).json({ content: fullResponse });
-    } catch (error) {
-        console.error('Error:', error);
-        res.status(500).json({ error: 'Failed to fetch data from Groq' });
-    }
-}
+      },
+    })
+  
+    return new NextResponse(stream)
+  }
